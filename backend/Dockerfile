@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:22.23.4-alpine AS builder
 
 WORKDIR /app
 
@@ -31,7 +31,7 @@ COPY tsconfig.build.json ./
 RUN npx tsc -p tsconfig.build.json
 
 # Production stage
-FROM node:20-alpine
+FROM node:22.23.4-alpine
 
 # Install runtime packages and create non-root user
 RUN apk add --no-cache openssl su-exec && \
