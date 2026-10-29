@@ -67,7 +67,7 @@ export class RealtimeCopilot {
   private touchIdle() {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => {
-      this.opts.onEvent?.("idle timeout — disconnecting");
+      this.opts.onEvent?.("Voice ended after 3 minutes idle.");
       this.disconnect();
     }, RealtimeCopilot.IDLE_MS);
   }
@@ -161,7 +161,6 @@ export class RealtimeCopilot {
         tool_choice: "auto",
       },
     });
-    this.opts.onEvent?.("session configured");
   }
 
   // Type a command (also the headless test path). Triggers a model response.
@@ -192,7 +191,6 @@ export class RealtimeCopilot {
         } catch {
           /* leave as {} */
         }
-        this.opts.onEvent?.(`tool: ${name}`);
         const result = await this.opts.runTool(name, args);
         this.send({
           type: "conversation.item.create",

@@ -17,6 +17,8 @@ export type JSONSchema = Record<string, unknown>;
 
 export type CopilotTool = {
   name: string;
+  // Short past-tense line shown to the user in the activity log.
+  label: string;
   description: string;
   inputSchema: JSONSchema;
   // Returns a short, model-facing result string (becomes the function_call output).
@@ -178,6 +180,7 @@ const insertCreatedElements = (api: ExcalidrawApi, created: any[]) => {
 export const COPILOT_TOOLS: CopilotTool[] = [
   {
     name: "get_scene",
+    label: "Read the drawing",
     description:
       "List the elements currently on the board (id, type, position, size, text). Call this before editing so you know what exists and can reference ids.",
     inputSchema: {
@@ -192,6 +195,7 @@ export const COPILOT_TOOLS: CopilotTool[] = [
   },
   {
     name: "add_elements",
+    label: "Added shapes",
     description:
       "Add one or more shapes/text/arrows to the board from compact skeletons. " +
       "Each skeleton: {type:'rectangle'|'ellipse'|'diamond'|'text'|'arrow'|'line', x, y, width?, height?, " +
@@ -221,6 +225,7 @@ export const COPILOT_TOOLS: CopilotTool[] = [
   },
   {
     name: "add_diagram",
+    label: "Drew a diagram",
     description:
       "Render a Mermaid diagram (flowchart, sequence, class, etc.) onto the board. Provide valid Mermaid source. " +
       "Best for structured diagrams; for a few loose shapes use add_elements instead.",
@@ -266,6 +271,7 @@ export const COPILOT_TOOLS: CopilotTool[] = [
   },
   {
     name: "update_element",
+    label: "Updated a shape",
     description:
       "Modify properties of an existing element by id. Pass only the fields to change, " +
       "e.g. {id, backgroundColor, strokeColor, x, y, width, height, text}.",
@@ -299,6 +305,7 @@ export const COPILOT_TOOLS: CopilotTool[] = [
   },
   {
     name: "delete_elements",
+    label: "Deleted shapes",
     description:
       "Delete elements by id (marks them deleted so the deletion syncs to collaborators).",
     inputSchema: {
@@ -332,6 +339,7 @@ export const COPILOT_TOOLS: CopilotTool[] = [
   },
   {
     name: "select_elements",
+    label: "Selected shapes",
     description:
       "Select elements by id (highlights them for the user). Pass an empty array to clear selection.",
     inputSchema: {
@@ -360,6 +368,7 @@ export const COPILOT_TOOLS: CopilotTool[] = [
   },
   {
     name: "set_viewport",
+    label: "Moved the view",
     description:
       "Control what the user sees. Either fit the whole drawing ({fit:'all'}), zoom to specific elements " +
       "({fit:'elements', ids:[...]}), or set an explicit zoom level ({zoom: 1.5}).",

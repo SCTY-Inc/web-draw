@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import type { RunTool } from "./useCopilotTools";
 import { RealtimeCopilot, type CopilotState } from "./realtime";
-import { realtimeToolSchemas } from "./tools";
+import { TOOLS_BY_NAME, realtimeToolSchemas } from "./tools";
 import { requestCompose } from "./compose";
 import { BTN_PRIMARY, BTN_SECONDARY } from "./styles";
 
@@ -98,7 +98,13 @@ function CopilotBody({ runTool }: { runTool: RunTool }) {
   const [log, setLog] = useState<string[]>([]);
   const rtRef = useRef<RealtimeCopilot | null>(null);
 
-  const pushLog = (line: string) => setLog((l) => [line, ...l].slice(0, 30));
+  const pushLog = (line: string) => setLog((l) => [line, ...l].slice(0, 8));
+  // Tool results are for the model; the user sees one plain line per action.
+  const runAndLog = async (name: string, args: unknown) => {
+    const r = await runTool(name, args);
+    pushLog(TOOLS_BY_NAME[name]?.label ?? name);
+    return r;
+  };
   const micOn = () => {
     rtRef.current?.setMicEnabled(true);
     setTalking(true);
@@ -154,18 +160,15 @@ function CopilotBody({ runTool }: { runTool: RunTool }) {
     setMicAvailable(true);
     const rt = new RealtimeCopilot({
       toolSchemas: realtimeToolSchemas(),
-      runTool: async (name, args) => {
-        const r = await runTool(name, args);
-        pushLog(`${name}: ${r}`);
-        return r;
-      },
+      runTool: runAndLog,
       onState: (s, detail) => {
         setState(s);
         setErrorDetail(s === "error" ? detail : undefined);
       },
       onEvent: (label) => {
+        // The status row already shows a missing mic.
         if (label.startsWith("no mic")) setMicAvailable(false);
-        pushLog(label);
+        else pushLog(label);
       },
     });
     rtRef.current = rt;
@@ -181,15 +184,13 @@ function CopilotBody({ runTool }: { runTool: RunTool }) {
 
   const compose = async (input: string) => {
     setComposing(true);
-    pushLog(`drawing from ${input.length} characters…`);
     try {
       const calls = await requestCompose(input);
       if (calls.length === 0) pushLog("Nothing to draw from that input.");
-      for (const c of calls)
-        pushLog(`${c.name}: ${await runTool(c.name, c.args)}`);
+      for (const c of calls) await runAndLog(c.name, c.args);
       setText("");
     } catch (e: any) {
-      pushLog(`error: ${e?.message || "compose failed"}`);
+      pushLog(`Couldn't draw: ${e?.message || "unknown error"}`);
     } finally {
       setComposing(false);
     }
@@ -361,7 +362,7 @@ function CopilotBody({ runTool }: { runTool: RunTool }) {
           aria-live="polite"
           aria-atomic="false"
           aria-label="Copilot activity"
-          className="min-h-0 overflow-auto rounded-xl border-2 border-neutral-200 bg-neutral-50 p-2 font-mono text-[11px] text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
+          className="max-h-40 space-y-0.5 overflow-auto rounded-xl border-2 border-neutral-200 bg-neutral-50 p-2 text-xs font-medium text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
         >
           {log.map((line, i) => (
             <div key={i}>{line}</div>
