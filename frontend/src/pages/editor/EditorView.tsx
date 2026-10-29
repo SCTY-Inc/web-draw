@@ -4,7 +4,6 @@ import { HistoryPreviewCanvas } from "./HistoryPreviewCanvas";
 import { Excalidraw, MainMenu } from "@excalidraw/excalidraw";
 import {
   ArrowLeft,
-  Bot,
   ChevronDown,
   ChevronUp,
   CloudOff,
@@ -12,6 +11,7 @@ import {
   History,
   Loader2,
   Share2,
+  Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
 import { Toaster } from "sonner";
@@ -21,8 +21,7 @@ import { ShareModal } from "../../components/ShareModal";
 import { UserAvatar as ProfileAvatar } from "../../components/UserAvatar";
 import type { UserIdentity } from "../../utils/identity";
 import { UIOptions, validateEmbeddableUrl } from "./shared";
-import { ComposePanel } from "../../copilot/ComposePanel";
-import { CopilotPanel } from "../../copilot/CopilotPanel";
+import { CopilotSidebar } from "../../copilot/CopilotSidebar";
 import type { RunTool } from "../../copilot/useCopilotTools";
 
 const COPILOT_ENABLED = import.meta.env.VITE_COPILOT_ENABLED === "true";
@@ -38,6 +37,7 @@ type EditorViewProps = {
   autosaveFailing: boolean;
   canEdit: boolean;
   copilotRunTool: RunTool;
+  onToggleCopilot: () => void;
   drawingName: string;
   editorContainerRef: React.RefObject<HTMLDivElement>;
   initialData: any;
@@ -113,6 +113,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   autosaveFailing,
   canEdit,
   copilotRunTool,
+  onToggleCopilot,
   drawingName,
   editorContainerRef,
   initialData,
@@ -153,22 +154,8 @@ export const EditorView: React.FC<EditorViewProps> = ({
   onToggleTheme,
 }) => {
   const [copilotOpen, setCopilotOpen] = React.useState(false);
-  const [composeOpen, setComposeOpen] = React.useState(false);
-  const copilotToggleRef = React.useRef<HTMLButtonElement | null>(null);
+  const [copilotDocked, setCopilotDocked] = React.useState(true);
   const copilotAvailable = COPILOT_ENABLED && canEdit && !isHistoryOpen;
-
-  const openCopilot = React.useCallback(() => {
-    setComposeOpen(false);
-    setCopilotOpen(true);
-  }, []);
-  const closeCopilot = React.useCallback(() => {
-    setCopilotOpen(false);
-    copilotToggleRef.current?.focus();
-  }, []);
-  const onComposeOpenChange = React.useCallback((next: boolean) => {
-    if (next) setCopilotOpen(false);
-    setComposeOpen(next);
-  }, []);
 
   return (
     <div
@@ -276,19 +263,17 @@ export const EditorView: React.FC<EditorViewProps> = ({
           </button>
           {copilotAvailable ? (
             <button
-              ref={copilotToggleRef}
-              onClick={() => (copilotOpen ? closeCopilot() : openCopilot())}
+              onClick={onToggleCopilot}
               className={clsx(
                 "ui-toolbar-button",
                 copilotOpen &&
                   "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
               )}
-              title="Voice co-pilot"
-              aria-label="Voice co-pilot"
+              title="Copilot"
+              aria-label="Copilot"
               aria-pressed={copilotOpen}
-              data-testid="copilot-toggle"
             >
-              <Bot size={20} />
+              <Sparkles size={20} />
             </button>
           ) : null}
           <div className="h-6 w-px bg-gray-300 dark:bg-gray-700" />
@@ -398,6 +383,14 @@ export const EditorView: React.FC<EditorViewProps> = ({
                 />
               </MainMenu.ItemCustom>
             </MainMenu>
+            {copilotAvailable ? (
+              <CopilotSidebar
+                runTool={copilotRunTool}
+                docked={copilotDocked}
+                onDock={setCopilotDocked}
+                onStateChange={setCopilotOpen}
+              />
+            ) : null}
           </Excalidraw>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-500 dark:text-gray-400">
@@ -414,22 +407,6 @@ export const EditorView: React.FC<EditorViewProps> = ({
           />
         ) : null}
         <Toaster position="bottom-center" />
-        {copilotAvailable ? (
-          <>
-            <CopilotPanel
-              runTool={copilotRunTool}
-              open={copilotOpen}
-              onClose={closeCopilot}
-            />
-            {copilotOpen ? null : (
-              <ComposePanel
-                runTool={copilotRunTool}
-                open={composeOpen}
-                onOpenChange={onComposeOpenChange}
-              />
-            )}
-          </>
-        ) : null}
       </div>
     </div>
   );

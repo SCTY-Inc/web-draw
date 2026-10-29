@@ -40,15 +40,17 @@ This file covers only what differs in this fork.
 
 ## Copilot (fork-only code)
 
-- `frontend/src/copilot/`: `tools.ts` (Excalidraw tool registry), `useCopilotTools.ts` (dispatcher), `webmcp.ts` (WebMCP adapter), `realtime.ts` (OpenAI Realtime WebRTC client), `CopilotPanel.tsx` (voice UI), `compose.ts` + `ComposePanel.tsx` (Compose), `styles.ts` (shared button recipes).
+- `frontend/src/copilot/`: `tools.ts` (Excalidraw tool registry), `useCopilotTools.ts` (dispatcher), `webmcp.ts` (WebMCP adapter), `realtime.ts` (OpenAI Realtime WebRTC client), `compose.ts` (Compose client), `CopilotSidebar.tsx` (the UI), `styles.ts` (shared button recipes).
+- `CopilotSidebar.tsx` is one Excalidraw `Sidebar` with one composer. Draw sends the text to Compose. Voice starts a Realtime session; while it is live, typed text goes to that session instead, because it can read and edit the scene. Closing the sidebar ends the voice session.
 - `backend/src/routes/realtime/session.ts`: mints ephemeral OpenAI Realtime client secrets.
 - `backend/src/routes/copilot/compose.ts`: `POST /copilot/compose`. It sends pasted Markdown or code to the model and returns canvas tool calls. The browser sends only `{ text }`. The prompt allows only flowchart, sequence, and class Mermaid diagrams, because `@excalidraw/mermaid-to-excalidraw` renders only those.
 - Hook points into upstream code:
   - `frontend/src/pages/Editor.tsx` calls `useCopilotTools` and passes `copilotRunTool` to `EditorView`. Tools are read-only while version history is open.
-  - `frontend/src/pages/editor/EditorView.tsx` owns the top-nav voice toggle and both panels. They share the bottom-right slot, so opening one closes the other. They are hidden while version history is open.
+  - `frontend/src/pages/Editor.tsx` also toggles the sidebar through `excalidrawAPI.toggleSidebar`.
+  - `frontend/src/pages/editor/EditorView.tsx` owns the nav toggle and renders `CopilotSidebar` inside `<Excalidraw>`. Both are hidden while version history is open.
   - `backend/src/index.ts` calls `registerRealtimeRoutes` and `registerComposeRoutes`.
   - `frontend/Dockerfile` passes `VITE_COPILOT_ENABLED`. `frontend/package.json` adds `@excalidraw/mermaid-to-excalidraw`.
-- The panels keep their accessibility features: an `aria-live` log, keyboard push-to-talk (`` ` ``), ⌘-Enter to compose, focus management, and error cards. Keep these when you edit the panels.
+- Keep the sidebar's accessibility features when you edit it: the `aria-live` activity log, keyboard push-to-talk (`` ` ``), ⌘/Ctrl-Enter to run, and the error card.
 
 Copilot environment variables. All are optional. The endpoints return 503 if `OPENAI_API_KEY` is unset.
 

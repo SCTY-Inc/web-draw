@@ -26,6 +26,7 @@ import { useEditorGridStep } from "./editor/useEditorGridStep";
 import { useKeyboardLayoutFix } from "./editor/useKeyboardLayoutFix";
 import { DEFAULT_GRID_STEP } from "../components/GridStepSelector";
 import { useCopilotTools } from "../copilot/useCopilotTools";
+import { COPILOT_SIDEBAR } from "../copilot/CopilotSidebar";
 
 export const Editor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -350,6 +351,9 @@ const ExcalidrawEditor: React.FC = () => {
         autosaveFailing={autosaveFailing}
         canEdit={canEdit}
         copilotRunTool={copilotRunTool}
+        onToggleCopilot={() =>
+          excalidrawAPI.current?.toggleSidebar({ name: COPILOT_SIDEBAR })
+        }
         drawingName={drawingName}
         editorContainerRef={editorContainerRef}
         initialData={initialData}

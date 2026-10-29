@@ -1,4 +1,4 @@
-// Shared neo-brutalist button recipes for the co-pilot surfaces (voice + Compose).
+// Shared neo-brutalist button recipes for the Copilot sidebar.
 // Border-2 + hard offset shadow + lift on hover, matching the app's design system.
 export const BTN_LIFT =
   "transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900";
