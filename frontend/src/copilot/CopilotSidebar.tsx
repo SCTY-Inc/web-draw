@@ -17,7 +17,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { RunTool } from "./useCopilotTools";
-import { RealtimeCopilot, type CopilotState } from "./realtime";
+import { RealtimeCopilot, type CopilotState, type MicMode } from "./realtime";
 import { TOOLS_BY_NAME, realtimeToolSchemas } from "./tools";
 import { requestCompose } from "./compose";
 import { BTN_PRIMARY, BTN_SECONDARY } from "./styles";
@@ -91,7 +91,7 @@ function CopilotBody({ runTool }: { runTool: RunTool }) {
   const [state, setState] = useState<CopilotState>("idle");
   const [errorDetail, setErrorDetail] = useState<string | undefined>();
   const [micAvailable, setMicAvailable] = useState(true);
-  const [micMode, setMicMode] = useState<"ptt" | "open">("ptt");
+  const [micMode, setMicMode] = useState<MicMode>("ptt");
   const [talking, setTalking] = useState(false);
   const [composing, setComposing] = useState(false);
   const [text, setText] = useState("");
@@ -106,11 +106,11 @@ function CopilotBody({ runTool }: { runTool: RunTool }) {
     return r;
   };
   const micOn = () => {
-    rtRef.current?.setMicEnabled(true);
+    rtRef.current?.pttStart();
     setTalking(true);
   };
   const micOff = () => {
-    rtRef.current?.setMicEnabled(false);
+    rtRef.current?.pttEnd();
     setTalking(false);
   };
 
@@ -120,12 +120,12 @@ function CopilotBody({ runTool }: { runTool: RunTool }) {
   const live = state === "live";
   const voiceOn = state === "connecting" || live;
 
-  // Open mic keeps the mic on (server VAD detects turns); push-to-talk mutes
-  // until the button or the ` key is held.
+  // Open mic lets the server detect turns; push-to-talk sends a turn only
+  // while the button or the ` key is held.
   useEffect(() => {
     if (!live || !micAvailable) return;
-    if (micMode === "open") micOn();
-    else micOff();
+    rtRef.current?.setMode(micMode);
+    setTalking(false);
   }, [micMode, live, micAvailable]);
 
   // Hold ` to talk. Captured before Excalidraw's key handlers, and ignored while
