@@ -24,7 +24,7 @@ export function registerRealtimeRoutes({ app, requireAuth, asyncHandler }: Deps)
         });
       }
 
-      const model = process.env.REALTIME_MODEL || "gpt-realtime-2";
+      const model = process.env.REALTIME_MODEL || "gpt-realtime-2.1";
       const voice = process.env.REALTIME_VOICE || "marin";
       // Low reasoning effort = snappy "draw a box" latency; bump via env for heavier
       // "design this whole architecture" sessions. (Verified field: session.reasoning.effort.)

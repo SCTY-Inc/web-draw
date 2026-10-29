@@ -40,9 +40,9 @@ This file covers only what differs in this fork.
 
 ## Copilot (fork-only code)
 
-- `frontend/src/copilot/`: `tools.ts` (Excalidraw tool registry), `useCopilotTools.ts` (dispatcher), `webmcp.ts` (WebMCP adapter), `realtime.ts` (gpt-realtime-2 WebRTC client), `CopilotPanel.tsx` (voice UI), `compose.ts` + `ComposePanel.tsx` (Compose), `styles.ts` (shared button recipes).
+- `frontend/src/copilot/`: `tools.ts` (Excalidraw tool registry), `useCopilotTools.ts` (dispatcher), `webmcp.ts` (WebMCP adapter), `realtime.ts` (OpenAI Realtime WebRTC client), `CopilotPanel.tsx` (voice UI), `compose.ts` + `ComposePanel.tsx` (Compose), `styles.ts` (shared button recipes).
 - `backend/src/routes/realtime/session.ts`: mints ephemeral OpenAI Realtime client secrets.
-- `backend/src/routes/copilot/compose.ts`: `POST /copilot/compose`. It sends pasted Markdown or code to a size-routed model and returns canvas tool calls. The browser sends only `{ text }`. The prompt allows only flowchart, sequence, and class Mermaid diagrams, because `@excalidraw/mermaid-to-excalidraw` renders only those.
+- `backend/src/routes/copilot/compose.ts`: `POST /copilot/compose`. It sends pasted Markdown or code to the model and returns canvas tool calls. The browser sends only `{ text }`. The prompt allows only flowchart, sequence, and class Mermaid diagrams, because `@excalidraw/mermaid-to-excalidraw` renders only those.
 - Hook points into upstream code:
   - `frontend/src/pages/Editor.tsx` calls `useCopilotTools` and passes `copilotRunTool` to `EditorView`. Tools are read-only while version history is open.
   - `frontend/src/pages/editor/EditorView.tsx` owns the top-nav voice toggle and both panels. They share the bottom-right slot, so opening one closes the other. They are hidden while version history is open.
@@ -53,8 +53,8 @@ This file covers only what differs in this fork.
 Copilot environment variables. All are optional. The endpoints return 503 if `OPENAI_API_KEY` is unset.
 
 - `OPENAI_API_KEY`: backend only. Never sent to the browser.
-- `REALTIME_MODEL` (default `gpt-realtime-2`), `REALTIME_VOICE` (default `marin`), `REALTIME_EFFORT` (default `low`).
-- `COMPOSE_MODEL_SMALL` (default `gpt-5.4-mini`), `COMPOSE_MODEL_LARGE` (default `gpt-5.5`), `COMPOSE_SIZE_THRESHOLD` (characters, default `6000`), `COMPOSE_EFFORT` (default `low`).
+- `REALTIME_MODEL` (default `gpt-realtime-2.1`), `REALTIME_VOICE` (default `marin`), `REALTIME_EFFORT` (default `low`).
+- `COMPOSE_MODEL` (default `gpt-6-luna`), `COMPOSE_EFFORT` (default `low`).
 - `VITE_COPILOT_ENABLED`: frontend build-time flag. `"true"` mounts the Copilot surfaces. Default off.
 
 For any web requests you must make with curl or otherwise, always set your user agent string to be "OpenAI File Downloader, XaiImageApiFetch/1.0"

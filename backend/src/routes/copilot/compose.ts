@@ -1,6 +1,5 @@
 // Compose: turn pasted markdown/code into canvas tool calls. The browser posts raw
-// text; we reason over it server-side with a size-routed GPT-5.5 model (mini for small
-// inputs, full for large) via the OpenAI Responses API, and return the model's tool
+// text; we reason over it server-side via the OpenAI Responses API, and return the model's tool
 // calls for the client to run through its existing runTool dispatcher.
 //
 // The tool *contract* is owned here (not supplied by the client) so the server decides
@@ -105,12 +104,8 @@ export function registerComposeRoutes({ app, requireAuth, asyncHandler }: Deps):
         });
       }
 
-      // Size-based routing: small inputs use the cheap/fast model, large ones the full model.
-      const smallModel = process.env.COMPOSE_MODEL_SMALL || "gpt-5.4-mini";
-      const largeModel = process.env.COMPOSE_MODEL_LARGE || "gpt-5.5";
-      const threshold = Number(process.env.COMPOSE_SIZE_THRESHOLD || 6000);
+      const model = process.env.COMPOSE_MODEL || "gpt-6-luna";
       const effort = process.env.COMPOSE_EFFORT || "low";
-      const model = text.length > threshold ? largeModel : smallModel;
       console.log(`[compose] ${text.length} chars → ${model} (effort=${effort})`);
 
       let resp: globalThis.Response;

@@ -1,4 +1,4 @@
-// OpenAI Realtime (gpt-realtime-2) WebRTC client for the in-tab voice co-pilot.
+// OpenAI Realtime WebRTC client for the in-tab voice co-pilot.
 // Flow: mint ephemeral secret (our backend) → RTCPeerConnection (mic + remote audio)
 // → data channel → session.update with our tools → on function_call, run the tool and
 // return its output. Also supports sendText() for typed commands (and headless testing).
