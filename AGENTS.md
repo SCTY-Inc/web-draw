@@ -42,6 +42,8 @@ This file covers only what differs in this fork.
 
 - `frontend/src/copilot/`: `tools.ts` (Excalidraw tool registry), `useCopilotTools.ts` (dispatcher), `webmcp.ts` (WebMCP adapter), `realtime.ts` (OpenAI Realtime WebRTC client), `compose.ts` (Compose client), `CopilotSidebar.tsx` (the UI), `styles.ts` (shared button recipes).
 - `CopilotSidebar.tsx` is one Excalidraw `Sidebar` with one composer. Draw sends the text to Compose. Voice starts a Realtime session; while it is live, typed text goes to that session instead, because it can read and edit the scene. Closing the sidebar ends the voice session.
+- Each tool in `tools.ts` needs a `label`: the short line the activity log shows. Tool results go only to the model, never to the log.
+- `realtime.ts` follows OpenAI's [Realtime conversations guide](https://developers.openai.com/api/docs/guides/realtime-conversations). Push-to-talk sets `turn_detection: null`. Pressing sends `response.cancel` and `output_audio_buffer.clear`, then `input_audio_buffer.clear`. Releasing sends `input_audio_buffer.commit` and `response.create`. Open mic uses `semantic_vad`. Function calls run on `response.done`, followed by one `response.create`. Check that guide before you change turn handling.
 - `backend/src/routes/realtime/session.ts`: mints ephemeral OpenAI Realtime client secrets.
 - `backend/src/routes/copilot/compose.ts`: `POST /copilot/compose`. It sends pasted Markdown or code to the model and returns canvas tool calls. The browser sends only `{ text }`. The prompt allows only flowchart, sequence, and class Mermaid diagrams, because `@excalidraw/mermaid-to-excalidraw` renders only those.
 - Hook points into upstream code:
