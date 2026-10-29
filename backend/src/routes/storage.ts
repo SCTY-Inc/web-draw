@@ -15,7 +15,7 @@ import {
 } from "../s3";
 import {
   VALID_STORAGE_FILE_ID,
-  type S3FileRecord,
+  type StoredFileRecord,
   type S3ObjectRecord,
 } from "./storage/helpers";
 import {
@@ -25,6 +25,8 @@ import {
   buildTrimS3CleanupPlan,
 } from "./storage/plans";
 import { deleteS3KeysInBatches } from "./storage/s3Delete";
+import { collectRetainedDrawingFileIds } from "./storage/retainedFiles";
+export { collectRetainedDrawingFileIds } from "./storage/retainedFiles";
 
 export type StorageRouteDeps = {
   prisma: PrismaClient;
@@ -96,28 +98,70 @@ export const registerStorageRoutes = (
       const files: Record<string, any> = parseJsonField(drawing.files, {});
       const trimPlan = buildTrimPlan(elements, files);
 
+      // Commit the trimmed drawing FIRST, guarded on the version we read.
+      // If a concurrent editor saved in between, `count` is 0 — we abort
+      // with 409 instead of overwriting their newer state with our stale
+      // snapshot, and we have not yet touched S3, so nothing is stranded.
+      const s3CleanupPlan = await prisma.$transaction(async (tx) => {
+        const updateResult = await tx.drawing.updateMany({
+          where: { id, version: drawing.version },
+          data: {
+            elements: JSON.stringify(trimPlan.activeElements),
+            files: JSON.stringify(trimPlan.cleanedFiles),
+            version: { increment: 1 },
+          },
+        });
+        if (updateResult.count === 0) return null;
+        const retainedFileIds = await collectRetainedDrawingFileIds(tx, id);
+        // Select rows while the guarded cleanup owns the transaction. Only
+        // their exact keys can be reclaimed: an untracked S3 object may be
+        // an upload that has stored bytes but has not created its row yet.
+        const storedRecords = await tx.drawingFile.findMany({
+          where: { drawingId: id },
+          select: {
+            fileId: true,
+            storage: true,
+            s3Key: true,
+            mimeType: true,
+            sizeBytes: true,
+          },
+        });
+        const plan = retainedFileIds
+          ? buildTrimS3CleanupPlan({
+              survivingFileIds: retainedFileIds,
+              storedRecords,
+            })
+          : { orphanKeys: [], orphanFileIds: [] };
+        if (plan.orphanFileIds.length > 0) {
+          await tx.drawingFile.deleteMany({
+            where: { drawingId: id, fileId: { in: plan.orphanFileIds } },
+          });
+        }
+        return plan;
+      });
+      if (!s3CleanupPlan) {
+        return res.status(409).json({
+          error: "Conflict",
+          code: "VERSION_CONFLICT",
+          message: "Drawing has changed since it was loaded for trimming.",
+        });
+      }
+
       // S3File is keyed (drawingId, fileId) and S3 objects sit under a
       // per-drawing path, so this drawing's storage is independent from
       // every other drawing's — no cross-drawing reference check needed.
       // Duplicates are made by copying objects into the new drawingId
       // path (see drawings.ts /duplicate), so deleting the original
       // does not strand a sibling.
+      //
+      // Delete objects only AFTER the DB write succeeds: the committed row
+      // no longer references the orphan files, so a mid-cleanup crash just
+      // leaves recoverable orphan S3 objects rather than a live drawing
+      // pointing at deleted objects (broken images).
       let s3ObjectsDeleted = 0;
       let s3DeleteErrors = 0;
 
-      if (isS3Enabled()) {
-        const s3Prefix = drawingS3Prefix(userId, id);
-
-        const s3FileRecords = await prisma.s3File.findMany({
-          where: { drawingId: id },
-        });
-        const s3Objects = await listS3Objects(s3Prefix);
-
-        const s3CleanupPlan = buildTrimS3CleanupPlan({
-          survivingFileIds: trimPlan.survivingFileIds,
-          s3FileRecords,
-          s3Objects,
-        });
+      if (isS3Enabled() && s3CleanupPlan.orphanKeys.length > 0) {
         const deleteResult = await deleteS3KeysInBatches({
           keys: s3CleanupPlan.orphanKeys,
           logPrefix: "[storage/trim]",
@@ -125,27 +169,8 @@ export const registerStorageRoutes = (
         });
         s3ObjectsDeleted = deleteResult.deleted;
         s3DeleteErrors = deleteResult.errors;
-
-        if (s3CleanupPlan.orphanFileIds.length > 0) {
-          await prisma.s3File.deleteMany({
-            where: {
-              drawingId: id,
-              fileId: { in: s3CleanupPlan.orphanFileIds },
-            },
-          });
-        }
       }
 
-      // 7. Update drawing — bump version so concurrent editors get a VERSION_CONFLICT
-      // and reload, instead of having their newer version silently overwritten.
-      await prisma.drawing.update({
-        where: { id },
-        data: {
-          elements: JSON.stringify(trimPlan.activeElements),
-          files: JSON.stringify(trimPlan.cleanedFiles),
-          version: { increment: 1 },
-        },
-      });
       invalidateDrawingsCache();
       notifyServerStateChange(id);
 
@@ -181,22 +206,25 @@ export const registerStorageRoutes = (
 
       const elements: any[] = parseJsonField(drawing.elements, []);
       const files: Record<string, any> = parseJsonField(drawing.files, {});
-      const s3Prefix = drawingS3Prefix(userId, id);
-      let s3FileRecords: S3FileRecord[] = [];
-      let s3Objects: S3ObjectRecord[] = [];
-
-      if (isS3Enabled()) {
-        s3FileRecords = await prisma.s3File.findMany({
+      const storedRecords: StoredFileRecord[] =
+        await prisma.drawingFile.findMany({
           where: { drawingId: id },
-          select: { fileId: true, s3Key: true, mimeType: true },
+          select: {
+            fileId: true,
+            storage: true,
+            s3Key: true,
+            mimeType: true,
+            sizeBytes: true,
+          },
         });
-        s3Objects = await listS3Objects(s3Prefix);
-      }
+      const s3Objects: S3ObjectRecord[] = isS3Enabled()
+        ? await listS3Objects(drawingS3Prefix(userId, id))
+        : [];
 
       const diffResponse = buildFilesDiffResponse({
         elements,
         files,
-        s3FileRecords,
+        storedRecords,
         s3Objects,
       });
 
@@ -262,42 +290,63 @@ export const registerStorageRoutes = (
         });
       }
 
-      // Batched S3 + DB cleanup. S3File rows are scoped
-      // (drawingId, fileId), and each drawing has its own S3 object
-      // under its own prefix path — deletion here cannot strand a
-      // sibling drawing. Doing N+1 sequential lookups + deletes per
-      // file would tie up the request unnecessarily for large
-      // selections.
+      // Commit the cleaned drawing FIRST, guarded on the version we read.
+      // A concurrent editor that re-referenced one of these files (or saved
+      // anything else) bumps the version, so `count` is 0 and we abort with
+      // 409 instead of deleting files the live drawing now depends on. S3 is
+      // untouched at this point, so a conflict strands nothing.
+      const deletableRecords = await prisma.$transaction(async (tx) => {
+        const updateResult = await tx.drawing.updateMany({
+          where: { id, version: drawing.version },
+          data: {
+            files: JSON.stringify(deletePlan.cleanedFiles),
+            elements: JSON.stringify(deletePlan.cleanedElements),
+            version: { increment: 1 },
+          },
+        });
+        if (updateResult.count === 0) return null;
+        const retainedFileIds = await collectRetainedDrawingFileIds(tx, id);
+        const deletableIds = retainedFileIds
+          ? fileIds.filter((fileId) => !retainedFileIds.has(fileId))
+          : [];
+        const records = await tx.drawingFile.findMany({
+          where: { drawingId: id, fileId: { in: deletableIds } },
+          select: { s3Key: true, storage: true },
+        });
+        await tx.drawingFile.deleteMany({
+          where: { drawingId: id, fileId: { in: deletableIds } },
+        });
+        return records;
+      });
+      if (!deletableRecords) {
+        return res.status(409).json({
+          error: "Conflict",
+          code: "VERSION_CONFLICT",
+          message: "Drawing has changed since it was loaded for cleanup.",
+        });
+      }
+
+      // Batched S3 + DB cleanup, run only AFTER the DB write commits. S3File
+      // rows are scoped (drawingId, fileId), and each drawing has its own S3
+      // object under its own prefix path — deletion here cannot strand a
+      // sibling drawing. Doing N+1 sequential lookups + deletes per file
+      // would tie up the request unnecessarily for large selections.
       let s3DeleteErrors = 0;
 
       if (isS3Enabled()) {
-        const s3Records = await prisma.s3File.findMany({
-          where: { drawingId: id, fileId: { in: fileIds } },
-        });
         const deleteResult = await deleteS3KeysInBatches({
-          keys: s3Records.map((record) => record.s3Key),
+          keys: deletableRecords
+            .filter((record) => record.storage === "s3")
+            .map((record) => record.s3Key)
+            .filter((key): key is string => Boolean(key)),
           logPrefix: "[storage/orphans]",
           deleteObject: deleteS3Object,
         });
         s3DeleteErrors = deleteResult.errors;
-
-        await prisma.s3File.deleteMany({
-          where: { drawingId: id, fileId: { in: fileIds } },
-        });
       }
 
       const errorCount = s3DeleteErrors;
 
-      // Update drawing with cleaned files and elements. Bump version so
-      // concurrent editors reload instead of silently overwriting.
-      await prisma.drawing.update({
-        where: { id },
-        data: {
-          files: JSON.stringify(deletePlan.cleanedFiles),
-          elements: JSON.stringify(deletePlan.cleanedElements),
-          version: { increment: 1 },
-        },
-      });
       invalidateDrawingsCache();
       notifyServerStateChange(id);
 

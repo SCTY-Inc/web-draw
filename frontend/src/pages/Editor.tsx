@@ -1,10 +1,11 @@
+import * as api from "../api";
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { getInitialLangCode } from "../components/LanguageSelector";
 import type { UserIdentity } from "../utils/identity";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { getFilesDelta } from "./editor/shared";
+import { usePreference } from "../context/PreferencesContext";
 import { useEditorChrome } from "./editor/useEditorChrome";
 import { useEditorAutoHide } from "./editor/useEditorAutoHide";
 import { useEditorIdentity } from "./editor/useEditorIdentity";
@@ -19,13 +20,26 @@ import { useEditorCanvasHandlers } from "./editor/useEditorCanvasHandlers";
 import { useEditorCommands } from "./editor/useEditorCommands";
 import { useEditorElementTracking } from "./editor/useEditorElementTracking";
 import { useEditorBroadcast } from "./editor/useEditorBroadcast";
+import { useEditorFileUploads } from "./editor/useEditorFileUploads";
+import { useEditorSceneApi } from "./editor/useEditorSceneApi";
+import { useEditorGridStep } from "./editor/useEditorGridStep";
+import { useKeyboardLayoutFix } from "./editor/useKeyboardLayoutFix";
+import { DEFAULT_GRID_STEP } from "../components/GridStepSelector";
 import { useCopilotTools } from "../copilot/useCopilotTools";
 
 export const Editor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  // Keep a departing drawing's queue and refs alive for its unmount flush,
+  // while the next drawing starts with its own scene, version and permissions.
+  return <ExcalidrawEditor key={id} />;
+};
+
+const ExcalidrawEditor: React.FC = () => {
+  useKeyboardLayoutFix();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
   const [accessLevel, setAccessLevel] = useState<
     "none" | "view" | "edit" | "owner"
@@ -38,19 +52,27 @@ export const Editor: React.FC = () => {
   const [isSceneLoading, setIsSceneLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSavingOnLeave, setIsSavingOnLeave] = useState(false);
-  const { autoHideEnabled, setAutoHideEnabled } = useEditorAutoHide(id);
+  const [editorAutoHide] = usePreference("editorAutoHide", false);
+  const { autoHideEnabled, setAutoHideEnabled } = useEditorAutoHide(
+    id,
+    editorAutoHide,
+  );
   const [isShareOpen, setIsShareOpen] = useState(false);
-  const [langCode, setLangCode] = useState(getInitialLangCode);
+  const [langCode, setLangCode] = usePreference(
+    "language",
+    getInitialLangCode(),
+  );
+  const [gridStep, setGridStep] = usePreference("gridStep", DEFAULT_GRID_STEP);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const previewBackup = useRef<{
-    elements: readonly any[];
-    appState: any;
-    files: any;
-  } | null>(null);
+  const historyButtonRef = useRef<HTMLButtonElement>(null);
+  const shareButtonRef = useRef<HTMLButtonElement>(null);
+  const [historyPreview, setHistoryPreview] =
+    useState<api.DrawingSnapshotFull | null>(null);
   const { isHeaderVisible, setIsHeaderVisible } = useEditorChrome({
     drawingName,
     autoHideEnabled,
     isRenaming,
+    isShareOpen,
   });
   const me: UserIdentity = useEditorIdentity(user);
   const [isReady, setIsReady] = useState(false);
@@ -69,6 +91,8 @@ export const Editor: React.FC = () => {
   const lastSyncedFilesRef = useRef<Record<string, any>>({});
   const lastSyncedElementOrderSigRef = useRef<string>("");
   const lastPersistedFilesRef = useRef<Record<string, any>>({});
+  // fileId -> stored ref URL for images uploaded via the per-file endpoint.
+  const uploadedFileRefsRef = useRef<Record<string, string>>({});
   const latestAppStateRef = useRef<any>(null);
   const debouncedSaveRef = useRef<
     | ((
@@ -82,7 +106,6 @@ export const Editor: React.FC = () => {
   const currentDrawingVersionRef = useRef<number | null>(null);
   const lastPersistedElementsRef = useRef<readonly any[]>([]);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const patchedAddFilesApisRef = useRef<WeakSet<object>>(new WeakSet());
   const suspiciousBlankLoadRef = useRef(false);
   const hasSceneChangesSinceLoadRef = useRef(false);
   const lastLocalChangeAtRef = useRef<number>(0);
@@ -112,7 +135,6 @@ export const Editor: React.FC = () => {
       me,
       isReady,
       excalidrawAPI,
-      editorContainerRef,
       lastSyncedFilesRef,
       lastSyncedElementOrderSigRef,
       latestElementsRef,
@@ -121,68 +143,34 @@ export const Editor: React.FC = () => {
       recordElementVersion,
       onAccessDenied: handleSocketAccessDenied,
     });
-  const emitFilesDeltaIfNeeded = useCallback(
-    (nextFiles: Record<string, any>) => {
-      if (!socketRef.current || !id) return false;
-      const filesDelta = getFilesDelta(
-        lastSyncedFilesRef.current,
-        nextFiles || {},
-      );
-      if (Object.keys(filesDelta).length === 0) return false;
-      latestFilesRef.current = nextFiles;
-      lastSyncedFilesRef.current = nextFiles;
-      socketRef.current.emit("element-update", {
-        drawingId: id,
-        elements: [],
-        files: filesDelta,
-        userId: socketMeRef.current.id,
-      });
-      return true;
-    },
-    [id, socketMeRef, socketRef],
-  );
-  const setExcalidrawAPI = useCallback(
-    (api: any) => {
-      excalidrawAPI.current = api;
-      if (import.meta.env.DEV) {
-        (window as any).__EXCALIDASH_EXCALIDRAW_API__ = api;
-      }
-      if (
-        api &&
-        typeof api.addFiles === "function" &&
-        !patchedAddFilesApisRef.current.has(api as object)
-      ) {
-        patchedAddFilesApisRef.current.add(api as object);
-        const originalAddFiles = api.addFiles.bind(api);
-        api.addFiles = (filesInput: Record<string, any> | any[]) => {
-          const normalizedFiles = Array.isArray(filesInput)
-            ? filesInput
-            : Object.values(filesInput || {});
-          originalAddFiles(normalizedFiles);
-          if (isSyncing.current) return;
-          const nextFiles = api.getFiles?.() || {};
-          const didEmit = emitFilesDeltaIfNeeded(nextFiles);
-          if (
-            didEmit &&
-            id &&
-            latestAppStateRef.current &&
-            debouncedSaveRef.current
-          ) {
-            hasSceneChangesSinceLoadRef.current = true;
-            debouncedSaveRef.current(
-              id,
-              latestElementsRef.current,
-              latestAppStateRef.current,
-              latestFilesRef.current || {},
-            );
-          }
-        };
-      }
-      setIsReady(true);
-    },
-    [emitFilesDeltaIfNeeded, id, isSyncing],
-  );
+  const { scanNow: scanFileUploads } = useEditorFileUploads({
+    canEdit,
+    drawingId: id,
+    isReady,
+    excalidrawAPI,
+    isSyncing,
+    latestFiles: latestFilesRef,
+    uploadedRefs: uploadedFileRefsRef,
+  });
+  const { emitFilesDeltaIfNeeded, setExcalidrawAPI } = useEditorSceneApi({
+    canEdit,
+    drawingId: id,
+    excalidrawAPIRef: excalidrawAPI,
+    isSyncing,
+    socketRef,
+    socketMeRef,
+    lastSyncedFilesRef,
+    latestFilesRef,
+    latestElementsRef,
+    latestAppStateRef,
+    debouncedSaveRef,
+    hasSceneChangesSinceLoadRef,
+    uploadedRefs: uploadedFileRefsRef,
+    scanFileUploads,
+    setIsReady,
+  });
   useLibraryImportFromUrl({ excalidrawAPIRef: excalidrawAPI, isReady, user });
+  useEditorGridStep({ excalidrawAPI, isReady, gridStep });
   const persistenceRefs = React.useMemo(
     () => ({
       currentDrawingVersion: currentDrawingVersionRef,
@@ -199,17 +187,23 @@ export const Editor: React.FC = () => {
       latestFiles: latestFilesRef,
       saveQueue: saveQueueRef,
       suspiciousBlankLoad: suspiciousBlankLoadRef,
+      uploadedRefs: uploadedFileRefsRef,
     }),
     [isSyncing],
   );
   const {
+    autosaveFailing,
     debouncedSave,
     debouncedSaveLibrary,
     debouncedSavePreview,
     enqueueSceneSave,
     saveDataRef,
     savePreviewRef,
+    historyRestorePendingRef,
+    runHistoryRestore,
   } = useEditorPersistence({
+    drawingId: id,
+    canEdit,
     refs: persistenceRefs,
     user,
     normalizeImageElementStatus,
@@ -228,6 +222,7 @@ export const Editor: React.FC = () => {
     latestFilesRef,
     socketMeRef,
     socketRef,
+    uploadedRefs: uploadedFileRefsRef,
     debouncedSave,
     debouncedSavePreview,
     computeElementOrderSig,
@@ -243,6 +238,7 @@ export const Editor: React.FC = () => {
       latestElements: latestElementsRef,
       initialSceneElements: initialSceneElementsRef,
       latestFiles: latestFilesRef,
+      isSyncing,
       lastSyncedFiles: lastSyncedFilesRef,
       lastSyncedElementOrderSig: lastSyncedElementOrderSigRef,
       lastPersistedFiles: lastPersistedFilesRef,
@@ -255,7 +251,7 @@ export const Editor: React.FC = () => {
       isBootstrappingScene,
       hasHydratedInitialScene,
     }),
-    [elementVersionMap],
+    [elementVersionMap, isSyncing],
   );
   useEditorSceneLoader({
     id,
@@ -270,6 +266,7 @@ export const Editor: React.FC = () => {
     setIsSceneLoading,
     setLoadError,
     recordElementVersion,
+    normalizeImageElementStatus,
   });
   const canvasHandlerRefs = React.useMemo(
     () => ({
@@ -302,14 +299,17 @@ export const Editor: React.FC = () => {
     });
   const commandRefs = React.useMemo(
     () => ({
+      currentDrawingVersion: currentDrawingVersionRef,
+      historyRestorePending: historyRestorePendingRef,
       excalidrawAPI,
       hasSceneChangesSinceLoad: hasSceneChangesSinceLoadRef,
       latestFiles: latestFilesRef,
       saveData: saveDataRef,
       savePreview: savePreviewRef,
       suspiciousBlankLoad: suspiciousBlankLoadRef,
+      uploadedRefs: uploadedFileRefsRef,
     }),
-    [saveDataRef, savePreviewRef],
+    [historyRestorePendingRef, saveDataRef, savePreviewRef],
   );
   const {
     handleBackClick,
@@ -338,7 +338,7 @@ export const Editor: React.FC = () => {
     user,
   });
   const { runTool: copilotRunTool } = useCopilotTools(excalidrawAPI, {
-    canEdit,
+    canEdit: canEdit && !isHistoryOpen,
   });
 
   return (
@@ -347,12 +347,17 @@ export const Editor: React.FC = () => {
         id={id}
         accessLevel={accessLevel}
         autoHideEnabled={autoHideEnabled}
+        autosaveFailing={autosaveFailing}
         canEdit={canEdit}
         copilotRunTool={copilotRunTool}
         drawingName={drawingName}
         editorContainerRef={editorContainerRef}
         initialData={initialData}
         isHeaderVisible={isHeaderVisible}
+        isHistoryOpen={isHistoryOpen}
+        historyPreview={isHistoryOpen ? historyPreview : null}
+        historyButtonRef={historyButtonRef}
+        shareButtonRef={shareButtonRef}
         isRenaming={isRenaming}
         isSavingOnLeave={isSavingOnLeave}
         isSceneLoading={isSceneLoading}
@@ -375,19 +380,27 @@ export const Editor: React.FC = () => {
         onRenameSubmit={handleRenameSubmit}
         onSetExcalidrawAPI={setExcalidrawAPI}
         onSetLangCode={setLangCode}
+        gridStep={gridStep}
+        onSetGridStep={setGridStep}
         onShareOpen={() => setIsShareOpen(true)}
+        isShareOpen={isShareOpen}
+        onCloseShare={() => setIsShareOpen(false)}
         onHistoryOpen={() => setIsHistoryOpen(true)}
         onToggleAutoHide={handleToggleAutoHide}
+        onToggleTheme={toggleTheme}
       />
       <EditorDialogs
         drawingId={id}
-        drawingName={drawingName}
-        excalidrawAPIRef={excalidrawAPI}
+        historyButtonRef={historyButtonRef}
+        getCurrentVersion={() => currentDrawingVersionRef.current}
         isHistoryOpen={isHistoryOpen}
-        isShareOpen={isShareOpen}
-        previewBackupRef={previewBackup}
+        onPreviewHistory={setHistoryPreview}
+        onRestoreSnapshot={(snapshotId) =>
+          runHistoryRestore(id!, () =>
+            api.restoreDrawingSnapshot(id!, snapshotId),
+          )
+        }
         onCloseHistory={() => setIsHistoryOpen(false)}
-        onCloseShare={() => setIsShareOpen(false)}
       />
     </>
   );

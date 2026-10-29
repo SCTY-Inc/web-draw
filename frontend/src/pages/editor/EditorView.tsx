@@ -1,10 +1,13 @@
 import React from "react";
+import type { DrawingSnapshotFull } from "../../api";
+import { HistoryPreviewCanvas } from "./HistoryPreviewCanvas";
 import { Excalidraw, MainMenu } from "@excalidraw/excalidraw";
 import {
   ArrowLeft,
+  Bot,
   ChevronDown,
   ChevronUp,
-  Bot,
+  CloudOff,
   Download,
   History,
   Loader2,
@@ -13,8 +16,11 @@ import {
 import clsx from "clsx";
 import { Toaster } from "sonner";
 import { LanguageSelector } from "../../components/LanguageSelector";
+import { GridStepSelector } from "../../components/GridStepSelector";
+import { ShareModal } from "../../components/ShareModal";
+import { UserAvatar as ProfileAvatar } from "../../components/UserAvatar";
 import type { UserIdentity } from "../../utils/identity";
-import { UIOptions } from "./shared";
+import { UIOptions, validateEmbeddableUrl } from "./shared";
 import { ComposePanel } from "../../copilot/ComposePanel";
 import { CopilotPanel } from "../../copilot/CopilotPanel";
 import type { RunTool } from "../../copilot/useCopilotTools";
@@ -29,12 +35,17 @@ type EditorViewProps = {
   id?: string;
   accessLevel: "none" | "view" | "edit" | "owner";
   autoHideEnabled: boolean;
+  autosaveFailing: boolean;
   canEdit: boolean;
   copilotRunTool: RunTool;
   drawingName: string;
   editorContainerRef: React.RefObject<HTMLDivElement>;
   initialData: any;
   isHeaderVisible: boolean;
+  isHistoryOpen: boolean;
+  historyPreview: DrawingSnapshotFull | null;
+  historyButtonRef: React.RefObject<HTMLButtonElement>;
+  shareButtonRef: React.RefObject<HTMLButtonElement>;
   isRenaming: boolean;
   isSavingOnLeave: boolean;
   isSceneLoading: boolean;
@@ -61,12 +72,17 @@ type EditorViewProps = {
   onRenameSubmit: (event: React.FormEvent) => void;
   onSetExcalidrawAPI: (api: any) => void;
   onSetLangCode: (langCode: string) => void;
+  gridStep: number;
+  onSetGridStep: (gridStep: number) => void;
   onShareOpen: () => void;
+  isShareOpen: boolean;
+  onCloseShare: () => void;
   onHistoryOpen: () => void;
   onToggleAutoHide: () => void;
+  onToggleTheme: () => void;
 };
 
-const UserAvatar = ({
+const CollaboratorAvatar = ({
   user,
   label,
   inactive = false,
@@ -75,17 +91,16 @@ const UserAvatar = ({
   label: string;
   inactive?: boolean;
 }) => (
-  <div className="relative group">
-    <div
+  <div className="relative group" data-testid="collaborator-avatar">
+    <ProfileAvatar
+      name={user.name}
+      size="toolbar"
       className={clsx(
-        "w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold text-white shadow-sm transition-all duration-300",
+        "transition-all duration-300",
         inactive && "opacity-30 grayscale",
       )}
-      style={{ backgroundColor: user.color }}
-    >
-      {user.initials}
-    </div>
-    <div className="absolute top-full mt-2 right-0 bg-gray-900 text-white text-xs py-1 px-2 rounded whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+    />
+    <div className="pointer-events-none absolute right-0 top-full z-50 mt-2 whitespace-nowrap rounded-lg bg-slate-900 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
       {label}
     </div>
   </div>
@@ -95,12 +110,17 @@ export const EditorView: React.FC<EditorViewProps> = ({
   id,
   accessLevel,
   autoHideEnabled,
+  autosaveFailing,
   canEdit,
   copilotRunTool,
   drawingName,
   editorContainerRef,
   initialData,
   isHeaderVisible,
+  isHistoryOpen,
+  historyPreview,
+  historyButtonRef,
+  shareButtonRef,
   isRenaming,
   isSavingOnLeave,
   isSceneLoading,
@@ -123,13 +143,19 @@ export const EditorView: React.FC<EditorViewProps> = ({
   onRenameSubmit,
   onSetExcalidrawAPI,
   onSetLangCode,
+  gridStep,
+  onSetGridStep,
   onShareOpen,
+  isShareOpen,
+  onCloseShare,
   onHistoryOpen,
   onToggleAutoHide,
+  onToggleTheme,
 }) => {
   const [copilotOpen, setCopilotOpen] = React.useState(false);
   const [composeOpen, setComposeOpen] = React.useState(false);
   const copilotToggleRef = React.useRef<HTMLButtonElement | null>(null);
+  const copilotAvailable = COPILOT_ENABLED && canEdit && !isHistoryOpen;
 
   const openCopilot = React.useCallback(() => {
     setComposeOpen(false);
@@ -145,11 +171,22 @@ export const EditorView: React.FC<EditorViewProps> = ({
   }, []);
 
   return (
-    <div className="h-screen flex flex-col bg-white dark:bg-neutral-950 overflow-hidden">
+    <div
+      className="h-screen flex flex-col bg-white dark:bg-neutral-950 overflow-hidden"
+      onKeyDownCapture={(event) => {
+        if (event.altKey && event.shiftKey && event.code === "KeyD") {
+          event.preventDefault();
+          event.stopPropagation();
+          onToggleTheme();
+        }
+      }}
+    >
       <header
         className={clsx(
-          "h-16 bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800 flex items-center px-4 justify-between z-10 fixed top-0 left-0 right-0 transition-transform duration-300",
-          isHeaderVisible ? "translate-y-0" : "-translate-y-full",
+          "h-16 bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800 flex items-center px-4 justify-between z-10 fixed top-0 left-0 right-0 transition-all duration-300",
+          isHeaderVisible || isShareOpen
+            ? "translate-y-0"
+            : "-translate-y-full",
         )}
       >
         <div className="flex items-center gap-4">
@@ -189,6 +226,16 @@ export const EditorView: React.FC<EditorViewProps> = ({
           )}
         </div>
         <div className="flex items-center gap-3">
+          {canEdit && autosaveFailing ? (
+            <span
+              className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200 border border-red-200 dark:border-red-800"
+              title="Your recent changes could not be saved. Check your connection and try again."
+              role="status"
+            >
+              <CloudOff size={14} />
+              Unsaved changes
+            </span>
+          ) : null}
           {!canEdit ? (
             <span className="text-xs font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200 border border-amber-200 dark:border-amber-800">
               Read-only
@@ -196,25 +243,29 @@ export const EditorView: React.FC<EditorViewProps> = ({
           ) : null}
           {canEdit && id ? (
             <button
+              ref={historyButtonRef}
               onClick={onHistoryOpen}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg text-gray-600 dark:text-gray-300 transition-colors"
+              className="ui-toolbar-button"
               title="Version History"
             >
               <History size={20} />
             </button>
           ) : null}
           {accessLevel === "owner" && id ? (
-            <button
-              onClick={onShareOpen}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg text-gray-600 dark:text-gray-300 transition-colors"
-              title="Share"
-            >
-              <Share2 size={20} />
-            </button>
+            <div className="relative inline-flex">
+              <button
+                ref={shareButtonRef}
+                onClick={onShareOpen}
+                className="ui-toolbar-button"
+                title="Share"
+              >
+                <Share2 size={20} />
+              </button>
+            </div>
           ) : null}
           <button
             onClick={onToggleAutoHide}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg text-gray-600 dark:text-gray-300 transition-colors"
+            className="ui-toolbar-button"
             title={autoHideEnabled ? "Disable auto-hide" : "Enable auto-hide"}
           >
             {autoHideEnabled ? (
@@ -223,15 +274,14 @@ export const EditorView: React.FC<EditorViewProps> = ({
               <ChevronDown size={20} />
             )}
           </button>
-          {COPILOT_ENABLED && canEdit ? (
+          {copilotAvailable ? (
             <button
               ref={copilotToggleRef}
               onClick={() => (copilotOpen ? closeCopilot() : openCopilot())}
               className={clsx(
-                "p-2 rounded-lg transition-colors",
-                copilotOpen
-                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
-                  : "hover:bg-gray-100 dark:hover:bg-neutral-800 text-gray-600 dark:text-gray-300",
+                "ui-toolbar-button",
+                copilotOpen &&
+                  "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
               )}
               title="Voice co-pilot"
               aria-label="Voice co-pilot"
@@ -244,32 +294,52 @@ export const EditorView: React.FC<EditorViewProps> = ({
           <div className="h-6 w-px bg-gray-300 dark:bg-gray-700" />
           <button
             onClick={onExportClick}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 rounded-lg text-gray-600 dark:text-gray-300 transition-colors"
+            className="ui-toolbar-button"
             title="Export drawing"
           >
             <Download size={20} />
           </button>
           <div className="h-6 w-px bg-gray-300 dark:bg-gray-700" />
           <div className="flex items-center">
-            <UserAvatar user={me} label={`${me.name} (You)`} />
-            <div className="h-6 w-px bg-gray-300 dark:bg-gray-700 mx-2" />
-            <div className="flex items-center gap-2">
-              {peers.map((peer) => (
-                <UserAvatar
-                  key={peer.id}
-                  user={peer}
-                  label={peer.name}
-                  inactive={!peer.isActive}
-                />
-              ))}
-            </div>
+            <CollaboratorAvatar user={me} label={`${me.name} (You)`} />
+            {peers.length > 0 ? (
+              <>
+                <div className="h-6 w-px bg-gray-300 dark:bg-gray-700 mx-2" />
+                <div className="flex items-center gap-2">
+                  {peers.map((peer) => (
+                    <CollaboratorAvatar
+                      key={peer.id}
+                      user={peer}
+                      label={peer.name}
+                      inactive={!peer.isActive}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       </header>
+      {accessLevel === "owner" && id ? (
+        <ShareModal
+          drawingId={id}
+          drawingName={drawingName}
+          isOpen={isShareOpen}
+          onClose={onCloseShare}
+          anchorRef={shareButtonRef}
+        />
+      ) : null}
       <div
         ref={editorContainerRef}
-        className="flex-1 w-full relative transition-all duration-300"
-        onDropCapture={onCanvasDropCapture}
+        className="relative w-full flex-1"
+        onDropCapture={(event) => {
+          if (isHistoryOpen) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+          onCanvasDropCapture(event);
+        }}
         style={{
           height: isHeaderVisible ? "calc(100vh - 4rem)" : "100vh",
           marginTop: isHeaderVisible ? "4rem" : "0",
@@ -287,7 +357,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
             </div>
             <button
               onClick={onNavigateHome}
-              className="px-4 py-2 rounded-lg border-2 border-black dark:border-neutral-700 bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 font-semibold hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
+              className="ui-button-secondary px-4"
             >
               Back to dashboard
             </button>
@@ -303,15 +373,24 @@ export const EditorView: React.FC<EditorViewProps> = ({
             onLibraryChange={onLibraryChange}
             excalidrawAPI={onSetExcalidrawAPI}
             UIOptions={UIOptions}
-            viewModeEnabled={!canEdit}
+            validateEmbeddable={validateEmbeddableUrl}
+            viewModeEnabled={!canEdit || isHistoryOpen}
           >
             <MainMenu>
-              <MainMenu.DefaultItems.ToggleTheme />
+              <MainMenu.Item onSelect={onToggleTheme} shortcut="Shift+Alt+D">
+                {theme === "dark" ? "Light mode" : "Dark mode"}
+              </MainMenu.Item>
               <MainMenu.DefaultItems.SaveAsImage />
               <MainMenu.DefaultItems.ClearCanvas />
               <MainMenu.DefaultItems.ChangeCanvasBackground />
               <MainMenu.DefaultItems.Help />
               <MainMenu.Separator />
+              <MainMenu.ItemCustom>
+                <GridStepSelector
+                  gridStep={gridStep}
+                  onChange={onSetGridStep}
+                />
+              </MainMenu.ItemCustom>
               <MainMenu.ItemCustom>
                 <LanguageSelector
                   langCode={langCode}
@@ -327,8 +406,15 @@ export const EditorView: React.FC<EditorViewProps> = ({
             </span>
           </div>
         )}
+        {historyPreview ? (
+          <HistoryPreviewCanvas
+            snapshot={historyPreview}
+            theme={theme}
+            langCode={langCode}
+          />
+        ) : null}
         <Toaster position="bottom-center" />
-        {COPILOT_ENABLED && canEdit ? (
+        {copilotAvailable ? (
           <>
             <CopilotPanel
               runTool={copilotRunTool}

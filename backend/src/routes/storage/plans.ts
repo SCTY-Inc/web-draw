@@ -1,8 +1,7 @@
 import {
   buildFilesDiff,
   collectReferencedFileIds,
-  fileIdFromS3Key,
-  type S3FileRecord,
+  type StoredFileRecord,
   type S3ObjectRecord,
 } from "./helpers";
 
@@ -30,27 +29,20 @@ export const buildTrimPlan = (elements: any[], files: FilesJson) => {
 
 export const buildTrimS3CleanupPlan = ({
   survivingFileIds,
-  s3FileRecords,
-  s3Objects,
+  storedRecords,
 }: {
   survivingFileIds: Set<string>;
-  s3FileRecords: S3FileRecord[];
-  s3Objects: S3ObjectRecord[];
+  storedRecords: StoredFileRecord[];
 }) => {
   const orphanKeys = new Set<string>();
   const orphanFileIds = new Set<string>();
 
-  for (const record of s3FileRecords) {
+  for (const record of storedRecords) {
     if (!survivingFileIds.has(record.fileId)) {
-      orphanKeys.add(record.s3Key);
+      // db-mode rows have no s3Key/object; only their DrawingFile row needs
+      // to be reclaimed. s3-mode rows also strand an object to delete.
+      if (record.s3Key) orphanKeys.add(record.s3Key);
       orphanFileIds.add(record.fileId);
-    }
-  }
-
-  for (const obj of s3Objects) {
-    const fileId = fileIdFromS3Key(obj.key);
-    if (fileId && !survivingFileIds.has(fileId)) {
-      orphanKeys.add(obj.key);
     }
   }
 
@@ -63,29 +55,33 @@ export const buildTrimS3CleanupPlan = ({
 export const buildFilesDiffResponse = ({
   elements,
   files,
-  s3FileRecords,
+  storedRecords,
   s3Objects,
 }: {
   elements: any[];
   files: FilesJson;
-  s3FileRecords: S3FileRecord[];
+  storedRecords: StoredFileRecord[];
   s3Objects: S3ObjectRecord[];
 }) => {
   const allCanvasRefs = collectReferencedFileIds(elements, true);
   const activeCanvasRefs = collectReferencedFileIds(elements, false);
   const sqliteFileIds = new Set(Object.keys(files));
+  // In db-mode there are no S3 objects; the stored-blob count is the number
+  // of DrawingFile rows instead.
+  const totalStoredFiles =
+    s3Objects.length > 0 ? s3Objects.length : storedRecords.length;
 
   return {
     summary: {
       totalCanvasRefs: allCanvasRefs.size,
       totalSqliteFiles: sqliteFileIds.size,
-      totalS3Files: s3Objects.length,
+      totalS3Files: totalStoredFiles,
     },
     files: buildFilesDiff({
       allCanvasRefs,
       activeCanvasRefs,
       sqliteFileIds,
-      s3FileRecords,
+      storedRecords,
       s3Objects,
     }),
   };
