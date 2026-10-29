@@ -4,7 +4,12 @@
 // return its output. Also supports sendText() for typed commands (and headless testing).
 import type { RunTool } from "./useCopilotTools";
 
-type ToolSchema = { type: "function"; name: string; description: string; parameters: Record<string, unknown> };
+type ToolSchema = {
+  type: "function";
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+};
 
 export type CopilotState = "idle" | "connecting" | "live" | "error";
 
@@ -29,7 +34,10 @@ async function fetchCsrf(): Promise<{ token: string; header: string }> {
   return r.json();
 }
 
-async function mintEphemeralSecret(): Promise<{ client_secret: string; model: string }> {
+async function mintEphemeralSecret(): Promise<{
+  client_secret: string;
+  model: string;
+}> {
   const { token, header } = await fetchCsrf();
   const r = await fetch("/api/realtime/session", {
     method: "POST",
@@ -91,7 +99,9 @@ export class RealtimeCopilot {
       try {
         const mic = await Promise.race<MediaStream>([
           navigator.mediaDevices.getUserMedia({ audio: true }),
-          new Promise<MediaStream>((_, rej) => setTimeout(() => rej(new Error("mic timeout")), 6000)),
+          new Promise<MediaStream>((_, rej) =>
+            setTimeout(() => rej(new Error("mic timeout")), 6000),
+          ),
         ]);
         this.micTrack = mic.getAudioTracks()[0];
         this.micTrack.enabled = false;
@@ -111,11 +121,17 @@ export class RealtimeCopilot {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      const sdpRes = await fetch(`https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(model)}`, {
-        method: "POST",
-        body: offer.sdp,
-        headers: { Authorization: `Bearer ${client_secret}`, "Content-Type": "application/sdp" },
-      });
+      const sdpRes = await fetch(
+        `https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(model)}`,
+        {
+          method: "POST",
+          body: offer.sdp,
+          headers: {
+            Authorization: `Bearer ${client_secret}`,
+            "Content-Type": "application/sdp",
+          },
+        },
+      );
       if (!sdpRes.ok) throw new Error(`SDP exchange failed: ${sdpRes.status}`);
       const answer = { type: "answer" as const, sdp: await sdpRes.text() };
       await pc.setRemoteDescription(answer);
@@ -130,7 +146,8 @@ export class RealtimeCopilot {
   }
 
   private send(obj: unknown) {
-    if (this.dc && this.dc.readyState === "open") this.dc.send(JSON.stringify(obj));
+    if (this.dc && this.dc.readyState === "open")
+      this.dc.send(JSON.stringify(obj));
     this.touchIdle();
   }
 
@@ -151,7 +168,11 @@ export class RealtimeCopilot {
   sendText(text: string) {
     this.send({
       type: "conversation.item.create",
-      item: { type: "message", role: "user", content: [{ type: "input_text", text }] },
+      item: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text }],
+      },
     });
     this.send({ type: "response.create" });
   }

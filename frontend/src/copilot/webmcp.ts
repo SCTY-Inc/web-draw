@@ -12,7 +12,7 @@ type WebMcpGlobal = {
   registerTool: (
     name: string,
     config: { description?: string; inputSchema?: Record<string, unknown> },
-    handler: (args: unknown) => Promise<unknown> | unknown
+    handler: (args: unknown) => Promise<unknown> | unknown,
   ) => void | (() => void);
 };
 
@@ -27,7 +27,7 @@ function getWebMcp(): WebMcpGlobal | null {
  * @returns cleanup that unregisters where the API supports it
  */
 export function registerToolsWithWebMCP(
-  dispatch: (name: string, args: unknown) => Promise<string>
+  dispatch: (name: string, args: unknown) => Promise<string>,
 ): () => void {
   const mcp = getWebMcp();
   if (!mcp) return () => {};
@@ -42,7 +42,7 @@ export function registerToolsWithWebMCP(
           const result = await dispatch(tool.name, args);
           // WebMCP expects MCP-style content.
           return { content: [{ type: "text", text: result }] };
-        }
+        },
       );
       if (typeof maybeDispose === "function") disposers.push(maybeDispose);
     } catch (err) {

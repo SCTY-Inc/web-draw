@@ -7,11 +7,19 @@ import type { Express, Request, Response } from "express";
 
 type Deps = {
   app: Express;
-  requireAuth: (req: Request, res: Response, next: (err?: unknown) => void) => void;
+  requireAuth: (
+    req: Request,
+    res: Response,
+    next: (err?: unknown) => void,
+  ) => void;
   asyncHandler: (fn: (req: Request, res: Response) => Promise<unknown>) => any;
 };
 
-export function registerRealtimeRoutes({ app, requireAuth, asyncHandler }: Deps): void {
+export function registerRealtimeRoutes({
+  app,
+  requireAuth,
+  asyncHandler,
+}: Deps): void {
   app.post(
     "/realtime/session",
     requireAuth,
@@ -32,30 +40,42 @@ export function registerRealtimeRoutes({ app, requireAuth, asyncHandler }: Deps)
 
       let resp: globalThis.Response;
       try {
-        resp = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            session: {
-              type: "realtime",
-              model,
-              reasoning: { effort },
-              audio: { output: { voice } },
+        resp = await fetch(
+          "https://api.openai.com/v1/realtime/client_secrets",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
             },
-          }),
-        });
+            body: JSON.stringify({
+              session: {
+                type: "realtime",
+                model,
+                reasoning: { effort },
+                audio: { output: { voice } },
+              },
+            }),
+          },
+        );
       } catch (err: any) {
-        console.error("[realtime] network error minting client secret:", err?.message || err);
+        console.error(
+          "[realtime] network error minting client secret:",
+          err?.message || err,
+        );
         return res.status(502).json({ error: "Realtime upstream unreachable" });
       }
 
       const raw = await resp.text();
       if (!resp.ok) {
-        console.error("[realtime] client_secrets failed", resp.status, raw.slice(0, 400));
-        return res.status(502).json({ error: "Realtime session failed", status: resp.status });
+        console.error(
+          "[realtime] client_secrets failed",
+          resp.status,
+          raw.slice(0, 400),
+        );
+        return res
+          .status(502)
+          .json({ error: "Realtime session failed", status: resp.status });
       }
 
       let data: any;
@@ -69,13 +89,19 @@ export function registerRealtimeRoutes({ app, requireAuth, asyncHandler }: Deps)
       //  - /client_secrets → { value, expires_at, session }
       //  - legacy /sessions → { client_secret: { value, expires_at } }
       const value = data?.value ?? data?.client_secret?.value ?? null;
-      const expiresAt = data?.expires_at ?? data?.client_secret?.expires_at ?? null;
+      const expiresAt =
+        data?.expires_at ?? data?.client_secret?.expires_at ?? null;
       if (!value) {
-        console.error("[realtime] no client secret in response:", raw.slice(0, 300));
-        return res.status(502).json({ error: "Realtime returned no client secret" });
+        console.error(
+          "[realtime] no client secret in response:",
+          raw.slice(0, 300),
+        );
+        return res
+          .status(502)
+          .json({ error: "Realtime returned no client secret" });
       }
 
       return res.json({ client_secret: value, expires_at: expiresAt, model });
-    })
+    }),
   );
 }

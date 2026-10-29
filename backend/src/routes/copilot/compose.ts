@@ -10,7 +10,11 @@ import type { Express, Request, Response } from "express";
 
 type Deps = {
   app: Express;
-  requireAuth: (req: Request, res: Response, next: (err?: unknown) => void) => void;
+  requireAuth: (
+    req: Request,
+    res: Response,
+    next: (err?: unknown) => void,
+  ) => void;
   asyncHandler: (fn: (req: Request, res: Response) => Promise<unknown>) => any;
 };
 
@@ -28,8 +32,14 @@ const COMPOSE_TOOLS = [
       type: "object",
       properties: {
         mermaid: { type: "string", description: "Mermaid diagram source." },
-        x: { type: "number", description: "Optional top-left x offset (default 0)." },
-        y: { type: "number", description: "Optional top-left y offset (default 0)." },
+        x: {
+          type: "number",
+          description: "Optional top-left x offset (default 0).",
+        },
+        y: {
+          type: "number",
+          description: "Optional top-left y offset (default 0).",
+        },
       },
       required: ["mermaid"],
       additionalProperties: false,
@@ -80,7 +90,11 @@ const INSTRUCTIONS = [
 // Cap input so a paste can't blow up a model call; generous enough for whole files.
 const MAX_INPUT_CHARS = 50_000;
 
-export function registerComposeRoutes({ app, requireAuth, asyncHandler }: Deps): void {
+export function registerComposeRoutes({
+  app,
+  requireAuth,
+  asyncHandler,
+}: Deps): void {
   app.post(
     "/copilot/compose",
     requireAuth,
@@ -93,9 +107,12 @@ export function registerComposeRoutes({ app, requireAuth, asyncHandler }: Deps):
         });
       }
 
-      const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+      const text =
+        typeof req.body?.text === "string" ? req.body.text.trim() : "";
       if (!text) {
-        return res.status(400).json({ error: "Bad request", message: "Provide non-empty `text`." });
+        return res
+          .status(400)
+          .json({ error: "Bad request", message: "Provide non-empty `text`." });
       }
       if (text.length > MAX_INPUT_CHARS) {
         return res.status(413).json({
@@ -106,13 +123,18 @@ export function registerComposeRoutes({ app, requireAuth, asyncHandler }: Deps):
 
       const model = process.env.COMPOSE_MODEL || "gpt-6-luna";
       const effort = process.env.COMPOSE_EFFORT || "low";
-      console.log(`[compose] ${text.length} chars → ${model} (effort=${effort})`);
+      console.log(
+        `[compose] ${text.length} chars → ${model} (effort=${effort})`,
+      );
 
       let resp: globalThis.Response;
       try {
         resp = await fetch("https://api.openai.com/v1/responses", {
           method: "POST",
-          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({
             model,
             instructions: INSTRUCTIONS,
@@ -130,8 +152,14 @@ export function registerComposeRoutes({ app, requireAuth, asyncHandler }: Deps):
 
       const raw = await resp.text();
       if (!resp.ok) {
-        console.error("[compose] responses failed", resp.status, raw.slice(0, 400));
-        return res.status(502).json({ error: "Compose request failed", status: resp.status });
+        console.error(
+          "[compose] responses failed",
+          resp.status,
+          raw.slice(0, 400),
+        );
+        return res
+          .status(502)
+          .json({ error: "Compose request failed", status: resp.status });
       }
 
       let data: any;
@@ -145,7 +173,10 @@ export function registerComposeRoutes({ app, requireAuth, asyncHandler }: Deps):
       // with `name` and `arguments` (a JSON string). Map them to {name, args}.
       const allowed = new Set(COMPOSE_TOOLS.map((t) => t.name));
       const calls = (Array.isArray(data?.output) ? data.output : [])
-        .filter((item: any) => item?.type === "function_call" && allowed.has(item?.name))
+        .filter(
+          (item: any) =>
+            item?.type === "function_call" && allowed.has(item?.name),
+        )
         .map((item: any) => {
           let args: unknown = {};
           try {
@@ -157,6 +188,6 @@ export function registerComposeRoutes({ app, requireAuth, asyncHandler }: Deps):
         });
 
       return res.json({ calls });
-    })
+    }),
   );
 }

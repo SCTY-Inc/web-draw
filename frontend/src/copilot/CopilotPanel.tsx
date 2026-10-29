@@ -99,7 +99,12 @@ export function CopilotPanel({
     if (state !== "live" || micMode !== "ptt" || !micAvailable) return;
     const isTyping = () => {
       const el = document.activeElement as HTMLElement | null;
-      return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+      return (
+        !!el &&
+        (el.tagName === "INPUT" ||
+          el.tagName === "TEXTAREA" ||
+          el.isContentEditable)
+      );
     };
     const down = (e: KeyboardEvent) => {
       if (e.code !== "Backquote" || e.repeat || isTyping()) return;
@@ -201,7 +206,8 @@ export function CopilotPanel({
     >
       <div className="mb-2 flex items-center justify-between">
         <span className="inline-flex items-center gap-1.5 text-sm font-bold text-neutral-900 dark:text-neutral-100">
-          <Bot size={16} className="text-indigo-600 dark:text-indigo-400" /> Co-pilot
+          <Bot size={16} className="text-indigo-600 dark:text-indigo-400" />{" "}
+          Co-pilot
           <span
             role="status"
             aria-live="polite"
@@ -223,11 +229,21 @@ export function CopilotPanel({
 
       <div className="flex flex-wrap items-center gap-2">
         {state === "idle" || state === "error" ? (
-          <button type="button" onClick={start} data-testid="copilot-start" className={BTN_PRIMARY}>
+          <button
+            type="button"
+            onClick={start}
+            data-testid="copilot-start"
+            className={BTN_PRIMARY}
+          >
             Start co-pilot
           </button>
         ) : (
-          <button type="button" onClick={stop} data-testid="copilot-stop" className={BTN_SECONDARY}>
+          <button
+            type="button"
+            onClick={stop}
+            data-testid="copilot-stop"
+            className={BTN_SECONDARY}
+          >
             {state === "connecting" ? "Cancel" : "Stop"}
           </button>
         )}
@@ -265,7 +281,8 @@ export function CopilotPanel({
           >
             {talking ? (
               <>
-                <span className="h-2 w-2 rounded-full bg-white motion-safe:animate-pulse" /> Talking…
+                <span className="h-2 w-2 rounded-full bg-white motion-safe:animate-pulse" />{" "}
+                Talking…
               </>
             ) : (
               <>
@@ -279,7 +296,8 @@ export function CopilotPanel({
             className="inline-flex select-none items-center gap-1.5 rounded-xl border-2 border-emerald-600 bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-700 dark:border-emerald-500 dark:bg-emerald-950 dark:text-emerald-300"
             data-testid="copilot-listening"
           >
-            <span className="h-2 w-2 rounded-full bg-emerald-500 motion-safe:animate-pulse" /> Listening
+            <span className="h-2 w-2 rounded-full bg-emerald-500 motion-safe:animate-pulse" />{" "}
+            Listening
           </span>
         )}
         {live && micAvailable && (
@@ -304,13 +322,18 @@ export function CopilotPanel({
       </div>
       {live && micAvailable && micMode === "ptt" && (
         <p className="mt-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400">
-          Hold <kbd className="rounded border-2 border-neutral-300 px-1 font-bold dark:border-neutral-600">`</kbd> or the button to talk.
+          Hold{" "}
+          <kbd className="rounded border-2 border-neutral-300 px-1 font-bold dark:border-neutral-600">
+            `
+          </kbd>{" "}
+          or the button to talk.
         </p>
       )}
 
       {live && !micAvailable && (
         <div className="mt-2 flex items-center gap-2 rounded-xl border-2 border-neutral-200 bg-neutral-50 p-2 text-xs font-bold text-neutral-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400">
-          <MicOff size={14} className="shrink-0" /> No microphone — type your request below.
+          <MicOff size={14} className="shrink-0" /> No microphone — type your
+          request below.
         </div>
       )}
 
@@ -345,7 +368,13 @@ export function CopilotPanel({
             data-testid="copilot-text"
             className="flex-1 rounded-xl border-2 border-black bg-slate-50 px-3 py-1.5 text-sm font-bold text-slate-900 placeholder:font-medium placeholder:text-slate-400 transition-all focus:border-indigo-600 focus:outline-none dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:focus:border-indigo-500"
           />
-          <button type="button" onClick={sendText} data-testid="copilot-send" aria-label="Send message" className={BTN_PRIMARY}>
+          <button
+            type="button"
+            onClick={sendText}
+            data-testid="copilot-send"
+            aria-label="Send message"
+            className={BTN_PRIMARY}
+          >
             <Send size={15} /> Send
           </button>
         </div>
@@ -360,7 +389,9 @@ export function CopilotPanel({
         data-testid="copilot-log"
       >
         {log.length === 0 ? (
-          <div className="font-sans font-medium text-neutral-500 dark:text-neutral-400">Start the co-pilot, then talk or type…</div>
+          <div className="font-sans font-medium text-neutral-500 dark:text-neutral-400">
+            Start the co-pilot, then talk or type…
+          </div>
         ) : (
           log.map((line, i) => <div key={i}>{line}</div>)
         )}

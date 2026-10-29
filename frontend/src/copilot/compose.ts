@@ -20,7 +20,9 @@ export async function requestCompose(text: string): Promise<ComposeCall[]> {
   });
   if (!r.ok) {
     const detail = await r.json().catch(() => ({}));
-    throw new Error(detail?.message || detail?.error || `compose failed: ${r.status}`);
+    throw new Error(
+      detail?.message || detail?.error || `compose failed: ${r.status}`,
+    );
   }
   const data = await r.json();
   return Array.isArray(data?.calls) ? data.calls : [];

@@ -69,16 +69,29 @@ const padBounds = (bounds: Bounds, padding: number): Bounds => [
   bounds[3] + padding,
 ];
 
-const moveElementsTo = (elements: any[], bounds: Bounds, x: number, y: number) => {
+const moveElementsTo = (
+  elements: any[],
+  bounds: Bounds,
+  x: number,
+  y: number,
+) => {
   const dx = x - bounds[0];
   const dy = y - bounds[1];
-  return elements.map((element) => ({ ...element, x: element.x + dx, y: element.y + dy }));
+  return elements.map((element) => ({
+    ...element,
+    x: element.x + dx,
+    y: element.y + dy,
+  }));
 };
 
 // Generated coordinates describe the group's internal layout. Preserve them when
 // already open; otherwise anchor around the selection, then visible work, and use
 // the first collision-free side. Empty canvases start in the viewport center.
-const placeInOpenSpace = (created: any[], existing: readonly any[], appState: any) => {
+const placeInOpenSpace = (
+  created: any[],
+  existing: readonly any[],
+  appState: any,
+) => {
   if (created.length === 0) return created;
 
   const createdBounds = getCommonBounds(created) as Bounds;
@@ -92,12 +105,17 @@ const placeInOpenSpace = (created: any[], existing: readonly any[], appState: an
     return moveElementsTo(created, createdBounds, x, y);
   }
 
-  const elementBounds = existing.map((element) => getCommonBounds([element]) as Bounds);
-  if (!elementBounds.some((bounds) => boundsOverlap(createdBounds, bounds))) return created;
+  const elementBounds = existing.map(
+    (element) => getCommonBounds([element]) as Bounds,
+  );
+  if (!elementBounds.some((bounds) => boundsOverlap(createdBounds, bounds)))
+    return created;
 
   const selectedIds = appState?.selectedElementIds || {};
   const selected = existing.filter((element) => selectedIds[element.id]);
-  const visible = existing.filter((_, index) => boundsOverlap(elementBounds[index], viewportBounds));
+  const visible = existing.filter((_, index) =>
+    boundsOverlap(elementBounds[index], viewportBounds),
+  );
   const anchorElements = selected.length > 0 ? selected : visible;
   const anchorBounds =
     anchorElements.length > 0
@@ -112,7 +130,10 @@ const placeInOpenSpace = (created: any[], existing: readonly any[], appState: an
   ];
 
   const collides = ([x, y]: readonly [number, number]) => {
-    const candidate = padBounds([x, y, x + createdWidth, y + createdHeight], COLLISION_PADDING);
+    const candidate = padBounds(
+      [x, y, x + createdWidth, y + createdHeight],
+      COLLISION_PADDING,
+    );
     return elementBounds.some((bounds) => boundsOverlap(candidate, bounds));
   };
 
@@ -123,7 +144,8 @@ const placeInOpenSpace = (created: any[], existing: readonly any[], appState: an
       [sceneBounds[2] + INSERTION_GAP, anchorBounds[1]],
       [anchorBounds[0], sceneBounds[3] + INSERTION_GAP],
     ];
-    origin = fallbacks.find((candidate) => !collides(candidate)) || fallbacks[0];
+    origin =
+      fallbacks.find((candidate) => !collides(candidate)) || fallbacks[0];
   }
 
   return moveElementsTo(created, createdBounds, origin[0], origin[1]);
@@ -132,10 +154,14 @@ const placeInOpenSpace = (created: any[], existing: readonly any[], appState: an
 // One insertion seam owns collision avoidance, selection/focus, and undo capture
 // for every tool that adds a generated group.
 const insertCreatedElements = (api: ExcalidrawApi, created: any[]) => {
-  const placed = placeInOpenSpace(created, api.getSceneElements(), api.getAppState());
+  const placed = placeInOpenSpace(
+    created,
+    api.getSceneElements(),
+    api.getAppState(),
+  );
   const existing = api.getSceneElementsIncludingDeleted();
   const selectedElementIds: Record<string, true> = Object.fromEntries(
-    placed.map((element) => [element.id, true])
+    placed.map((element) => [element.id, true]),
   );
 
   api.updateScene({
@@ -154,7 +180,11 @@ export const COPILOT_TOOLS: CopilotTool[] = [
     name: "get_scene",
     description:
       "List the elements currently on the board (id, type, position, size, text). Call this before editing so you know what exists and can reference ids.",
-    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
     handler: (api) => {
       const els = api.getSceneElements().map(summarizeElement);
       return JSON.stringify({ count: els.length, elements: els });
@@ -182,7 +212,10 @@ export const COPILOT_TOOLS: CopilotTool[] = [
     handler: (api, args) => {
       const skeletons = Array.isArray(args?.skeletons) ? args.skeletons : [];
       if (skeletons.length === 0) return "No skeletons provided.";
-      const created = insertCreatedElements(api, skeletonsToElements(skeletons));
+      const created = insertCreatedElements(
+        api,
+        skeletonsToElements(skeletons),
+      );
       return `Added ${created.length} element(s): ${created.map((e: any) => `${e.type}#${e.id.slice(0, 6)}`).join(", ")}`;
     },
   },
@@ -195,8 +228,14 @@ export const COPILOT_TOOLS: CopilotTool[] = [
       type: "object",
       properties: {
         mermaid: { type: "string", description: "Mermaid diagram source." },
-        x: { type: "number", description: "Optional top-left x offset (default 0)." },
-        y: { type: "number", description: "Optional top-left y offset (default 0)." },
+        x: {
+          type: "number",
+          description: "Optional top-left x offset (default 0).",
+        },
+        y: {
+          type: "number",
+          description: "Optional top-left y offset (default 0).",
+        },
       },
       required: ["mermaid"],
       additionalProperties: false,
@@ -205,12 +244,20 @@ export const COPILOT_TOOLS: CopilotTool[] = [
       const src = typeof args?.mermaid === "string" ? args.mermaid : "";
       if (!src.trim()) return "No mermaid source provided.";
       // Dynamic import: keeps this optional dep out of the critical path.
-      const { parseMermaidToExcalidraw } = await import("@excalidraw/mermaid-to-excalidraw");
-      const { elements: skeletons, files } = await parseMermaidToExcalidraw(src);
-      const created = convertToExcalidrawElements(skeletons as any, { regenerateIds: true });
+      const { parseMermaidToExcalidraw } =
+        await import("@excalidraw/mermaid-to-excalidraw");
+      const { elements: skeletons, files } =
+        await parseMermaidToExcalidraw(src);
+      const created = convertToExcalidrawElements(skeletons as any, {
+        regenerateIds: true,
+      });
       const dx = Number(args?.x) || 0;
       const dy = Number(args?.y) || 0;
-      const shifted = created.map((e: any) => ({ ...e, x: e.x + dx, y: e.y + dy }));
+      const shifted = created.map((e: any) => ({
+        ...e,
+        x: e.x + dx,
+        y: e.y + dy,
+      }));
       const placed = insertCreatedElements(api, shifted);
       // Mermaid may emit image files (e.g. for some node types); ignore if none.
       void files;
@@ -226,14 +273,18 @@ export const COPILOT_TOOLS: CopilotTool[] = [
       type: "object",
       properties: {
         id: { type: "string", description: "Target element id." },
-        props: { type: "object", description: "Partial properties to merge onto the element." },
+        props: {
+          type: "object",
+          description: "Partial properties to merge onto the element.",
+        },
       },
       required: ["id", "props"],
       additionalProperties: false,
     },
     handler: (api, args) => {
       const id = String(args?.id || "");
-      const props = (args?.props && typeof args.props === "object") ? args.props : {};
+      const props =
+        args?.props && typeof args.props === "object" ? args.props : {};
       const all = api.getSceneElementsIncludingDeleted();
       let found = false;
       const next = all.map((el: any) => {
@@ -248,17 +299,24 @@ export const COPILOT_TOOLS: CopilotTool[] = [
   },
   {
     name: "delete_elements",
-    description: "Delete elements by id (marks them deleted so the deletion syncs to collaborators).",
+    description:
+      "Delete elements by id (marks them deleted so the deletion syncs to collaborators).",
     inputSchema: {
       type: "object",
       properties: {
-        ids: { type: "array", items: { type: "string" }, description: "Element ids to delete." },
+        ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "Element ids to delete.",
+        },
       },
       required: ["ids"],
       additionalProperties: false,
     },
     handler: (api, args) => {
-      const ids: string[] = Array.isArray(args?.ids) ? args.ids.map(String) : [];
+      const ids: string[] = Array.isArray(args?.ids)
+        ? args.ids.map(String)
+        : [];
       if (ids.length === 0) return "No ids provided.";
       const idSet = new Set(ids);
       const all = api.getSceneElementsIncludingDeleted();
@@ -274,21 +332,30 @@ export const COPILOT_TOOLS: CopilotTool[] = [
   },
   {
     name: "select_elements",
-    description: "Select elements by id (highlights them for the user). Pass an empty array to clear selection.",
+    description:
+      "Select elements by id (highlights them for the user). Pass an empty array to clear selection.",
     inputSchema: {
       type: "object",
       properties: {
-        ids: { type: "array", items: { type: "string" }, description: "Element ids to select." },
+        ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "Element ids to select.",
+        },
       },
       required: ["ids"],
       additionalProperties: false,
     },
     handler: (api, args) => {
-      const ids: string[] = Array.isArray(args?.ids) ? args.ids.map(String) : [];
+      const ids: string[] = Array.isArray(args?.ids)
+        ? args.ids.map(String)
+        : [];
       const selectedElementIds: Record<string, true> = {};
       ids.forEach((id) => (selectedElementIds[id] = true));
       api.updateScene({ appState: { selectedElementIds } });
-      return ids.length ? `Selected ${ids.length} element(s).` : "Cleared selection.";
+      return ids.length
+        ? `Selected ${ids.length} element(s).`
+        : "Cleared selection.";
     },
   },
   {
@@ -299,9 +366,20 @@ export const COPILOT_TOOLS: CopilotTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        fit: { type: "string", enum: ["all", "elements"], description: "Fit mode." },
-        ids: { type: "array", items: { type: "string" }, description: "Element ids when fit='elements'." },
-        zoom: { type: "number", description: "Explicit zoom level (e.g. 1 = 100%)." },
+        fit: {
+          type: "string",
+          enum: ["all", "elements"],
+          description: "Fit mode.",
+        },
+        ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "Element ids when fit='elements'.",
+        },
+        zoom: {
+          type: "number",
+          description: "Explicit zoom level (e.g. 1 = 100%).",
+        },
       },
       additionalProperties: false,
     },
@@ -310,20 +388,30 @@ export const COPILOT_TOOLS: CopilotTool[] = [
         api.updateScene({ appState: { zoom: { value: args.zoom } } });
         return `Set zoom to ${Math.round(args.zoom * 100)}%.`;
       }
-      if (args?.fit === "elements" && Array.isArray(args?.ids) && args.ids.length) {
+      if (
+        args?.fit === "elements" &&
+        Array.isArray(args?.ids) &&
+        args.ids.length
+      ) {
         const idSet = new Set(args.ids.map(String));
-        const targets = api.getSceneElements().filter((el: any) => idSet.has(el.id));
+        const targets = api
+          .getSceneElements()
+          .filter((el: any) => idSet.has(el.id));
         api.scrollToContent(targets, { fitToContent: true, animate: true });
         return `Zoomed to ${targets.length} element(s).`;
       }
-      api.scrollToContent(api.getSceneElements(), { fitToContent: true, animate: true });
+      api.scrollToContent(api.getSceneElements(), {
+        fitToContent: true,
+        animate: true,
+      });
       return "Fit the whole drawing into view.";
     },
   },
 ];
 
-export const TOOLS_BY_NAME: Record<string, CopilotTool> =
-  Object.fromEntries(COPILOT_TOOLS.map((t) => [t.name, t]));
+export const TOOLS_BY_NAME: Record<string, CopilotTool> = Object.fromEntries(
+  COPILOT_TOOLS.map((t) => [t.name, t]),
+);
 
 // Tool schemas in the shape the OpenAI Realtime API expects (session.tools).
 export const realtimeToolSchemas = () =>

@@ -93,7 +93,11 @@ export function ComposePanel({
     >
       <div className="mb-2 flex items-center justify-between">
         <span className="inline-flex items-center gap-1.5 text-sm font-bold text-neutral-900 dark:text-neutral-100">
-          <FileCode2 size={16} className="text-indigo-600 dark:text-indigo-400" /> Compose
+          <FileCode2
+            size={16}
+            className="text-indigo-600 dark:text-indigo-400"
+          />{" "}
+          Compose
         </span>
         <button
           type="button"
@@ -130,13 +134,21 @@ export function ComposePanel({
           data-testid="compose-run"
           className={`${BTN_PRIMARY} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}
         >
-          {working ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+          {working ? (
+            <Loader2 size={15} className="animate-spin" />
+          ) : (
+            <Sparkles size={15} />
+          )}
           {working ? "Composing…" : "Compose"}
         </button>
         <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-          <kbd className="rounded border-2 border-neutral-300 px-1 font-bold dark:border-neutral-600">⌘/Ctrl</kbd>
+          <kbd className="rounded border-2 border-neutral-300 px-1 font-bold dark:border-neutral-600">
+            ⌘/Ctrl
+          </kbd>
           +
-          <kbd className="rounded border-2 border-neutral-300 px-1 font-bold dark:border-neutral-600">↵</kbd>
+          <kbd className="rounded border-2 border-neutral-300 px-1 font-bold dark:border-neutral-600">
+            ↵
+          </kbd>
         </span>
       </div>
 
@@ -146,7 +158,9 @@ export function ComposePanel({
           className="mt-2 flex items-start gap-2 rounded-xl border-2 border-rose-600 bg-rose-50 p-2.5 text-xs font-bold text-rose-600 dark:border-rose-500 dark:bg-rose-900/20 dark:text-rose-400"
         >
           <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-          <p className="leading-relaxed">Compose couldn’t finish — see the log below, then try again.</p>
+          <p className="leading-relaxed">
+            Compose couldn’t finish — see the log below, then try again.
+          </p>
         </div>
       )}
 
