@@ -1,0 +1,23 @@
+# web-draw
+
+> web-draw is SCTY's fork of ExcaliDash, a self-hosted workspace for Excalidraw drawings with collections, live collaboration, sharing and version history. This fork adds a Copilot that draws on the canvas from your voice or from pasted Markdown or code. Made by SCTY Lab.
+
+- Source: https://github.com/SCTY-Inc/web-draw (LGPL-3.0). Upstream: https://github.com/ZimengXiong/ExcaliDash
+- Storage: one SQLite database by default, with uploaded images beside it. Drawings export as `.excalidraw` files.
+- Copilot: needs a build from this repository with `VITE_COPILOT_ENABLED=true` and `OPENAI_API_KEY` on the backend. Compose allows the model only flowchart, sequence and class Mermaid diagrams. Voice sessions end after three idle minutes.
+- The app at https://draw.scty.org/ needs sign-in.
+
+## Quickstart
+
+```sh
+git clone https://github.com/SCTY-Inc/web-draw.git
+cd web-draw
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Open http://localhost:6767. These commands run the published upstream ExcaliDash images, without the Copilot. The compose file publishes port 6767 on every network interface, so put it behind a firewall or a proxy.
+
+## More
+
+- Page: https://draw.scty.org/
+- SCTY Lab: https://scty.org/lab

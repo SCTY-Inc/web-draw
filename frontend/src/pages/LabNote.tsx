@@ -43,14 +43,20 @@ export const LabNote: React.FC = () => {
         </nav>
 
         <header className="border-b border-black pb-14 pt-[72px]">
-          <p className="m-0 font-mono text-xs text-black/60">SCTY Lab</p>
+          <p className="m-0 font-mono text-xs text-black/60">
+            <a href="https://scty.org/lab" className={linkClass}>
+              SCTY Lab
+            </a>
+          </p>
           <h1 className="mt-6 max-w-[14ch] text-[clamp(2.5rem,7vw,5rem)] font-medium leading-[0.95] tracking-[-0.05em]">
             A shared whiteboard you host yourself.
           </h1>
           <p className="mt-7 max-w-[42ch] text-[clamp(1.1rem,2.4vw,1.375rem)] leading-[1.45] text-black/60">
-            Excalidraw workspaces with collections, live collaboration, sharing
-            and version history. This fork adds a Copilot: say what you want, or
-            paste Markdown or code, and it draws on the canvas.
+            web-draw is SCTY&apos;s fork of ExcaliDash, a self-hosted workspace
+            for Excalidraw drawings with collections, live collaboration,
+            sharing and version history. It is for teams who want their
+            whiteboards on their own server. This fork adds a Copilot: say what
+            you want, or paste Markdown or code, and it draws on the canvas.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-5 text-[15px]">
             <Link
@@ -67,9 +73,9 @@ export const LabNote: React.FC = () => {
 
         <Section id="file-title" title="One file holds the drawings">
           <p>
-            Every drawing, collection and version lives in one SQLite database
-            by default, with uploaded images in a folder beside it. There is no
-            outside service. Any drawing exports as a plain{" "}
+            By default, every drawing, collection and version lives in one
+            SQLite database, with uploaded images in a folder beside it. Storage
+            needs no outside service. Any drawing exports as a plain{" "}
             <Code>.excalidraw</Code> file that the free Excalidraw editor can
             open.
           </p>
