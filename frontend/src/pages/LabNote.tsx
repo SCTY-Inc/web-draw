@@ -59,7 +59,7 @@ export const LabNote: React.FC = () => {
               Sign in
             </Link>
             <a href={REPO} className={linkClass}>
-              View on GitHub ↗
+              View on GitHub
             </a>
           </div>
         </header>
@@ -132,14 +132,14 @@ docker compose -f docker-compose.prod.yml up -d`}
               href="https://github.com/ZimengXiong/ExcaliDash"
               className={linkClass}
             >
-              ExcaliDash ↗
+              ExcaliDash
             </a>
           </span>
           <a href={REPO} className={linkClass}>
-            GitHub ↗
+            GitHub
           </a>
           <a href="https://scty.org/lab" className={linkClass}>
-            SCTY Lab ↗
+            SCTY Lab
           </a>
         </footer>
       </main>
