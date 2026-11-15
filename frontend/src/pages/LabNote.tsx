@@ -30,7 +30,8 @@ export const LabNote: React.FC = () => {
     <div className="min-h-screen bg-[#F0F0F0] font-['Helvetica_Neue',Helvetica,Arial,sans-serif] text-[18px] leading-[1.65] text-black">
       <main className="mx-auto max-w-[1040px] px-6 pb-10">
         <nav className="flex items-center justify-between py-7 text-[15px]">
-          <span className="text-xl font-medium tracking-[-0.02em]">
+          <span className="flex items-center gap-3 text-xl font-medium tracking-[-0.02em]">
+            <img src="/favicon.svg" alt="" width={28} height={28} className="block" />
             web-draw
           </span>
           <Link
